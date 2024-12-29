@@ -39,7 +39,6 @@ func RootHandler(w http.ResponseWriter, _ *http.Request) {
 
 	data := map[string]string{
 		"monsterName":  monster.FullName,
-		"monsterBrand": monster.Brand,
 		"monsterPrice": monster.GrossPrice,
 	}
 
@@ -108,10 +107,6 @@ func createInsecureHTTPClient() *http.Client {
 type Monster struct {
 	Id             int    `json:"id"`
 	FullName       string `json:"full_name"`
-	Brand          string `json:"brand"`
-	BrandId        int    `json:"brand_id"`
-	Name           string `json:"name"`
-	NameExtra      string `json:"name_extra"`
 	GrossPrice     string `json:"gross_price"`
 	GrossUnitPrice string `json:"gross_unit_price"`
 }
