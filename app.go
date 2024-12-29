@@ -3,7 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"embed"
+	"encoding/json"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -33,7 +35,15 @@ func main() {
 }
 
 func RootHandler(w http.ResponseWriter, _ *http.Request) {
-	_ = t.ExecuteTemplate(w, "index.html.tmpl", nil)
+	monster := getMonsterData()
+
+	data := map[string]string{
+		"monsterName":  monster.FullName,
+		"monsterBrand": monster.Brand,
+		"monsterPrice": monster.GrossPrice,
+	}
+
+	_ = t.ExecuteTemplate(w, "index.html.tmpl", data)
 }
 
 func PingHandler(w http.ResponseWriter, _ *http.Request) {
@@ -64,9 +74,44 @@ func SitemapHandler(w http.ResponseWriter, _ *http.Request) {
 	_ = t.ExecuteTemplate(w, "sitemap.xml.tmpl", data)
 }
 
+func getMonsterData() Monster {
+	odaMonsterEndpoint := "https://oda.com/tienda-web-api/v1/products/23300/"
+
+	client := createInsecureHTTPClient()
+
+	response, err := client.Get(odaMonsterEndpoint)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	responseData, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	var monster Monster
+	err = json.Unmarshal(responseData, &monster)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	return monster
+}
+
 func createInsecureHTTPClient() *http.Client {
 	customTransport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	return &http.Client{Transport: customTransport}
+}
+
+type Monster struct {
+	Id             int    `json:"id"`
+	FullName       string `json:"full_name"`
+	Brand          string `json:"brand"`
+	BrandId        int    `json:"brand_id"`
+	Name           string `json:"name"`
+	NameExtra      string `json:"name_extra"`
+	GrossPrice     string `json:"gross_price"`
+	GrossUnitPrice string `json:"gross_unit_price"`
 }
