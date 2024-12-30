@@ -2,13 +2,16 @@ package main
 
 import (
 	"crypto/tls"
+	"database/sql"
 	"embed"
 	"encoding/json"
+	_ "github.com/mattn/go-sqlite3"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 //go:embed templates/*
@@ -26,6 +29,8 @@ func main() {
 	log.Println("App live and listening on port:", port)
 
 	http.HandleFunc("/", RootHandler)
+	http.HandleFunc("/insert-latest-monster-price", InsertLatestMonsterPriceHandler)
+	http.HandleFunc("/create-table", CreateTableHandler)
 	http.HandleFunc("/ping", PingHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/robots.txt", RobotsHandler)
@@ -34,15 +39,60 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func RootHandler(w http.ResponseWriter, _ *http.Request) {
-	monster := getMonsterData()
+type MonsterRecord struct {
+	ID         int       `json:"id"`
+	GrossPrice string    `json:"gross_price"`
+	CreatedAt  time.Time `json:"created_at"`
+}
 
-	data := map[string]string{
-		"monsterName":  monster.FullName,
-		"monsterPrice": monster.GrossPrice,
+func RootHandler(w http.ResponseWriter, _ *http.Request) {
+	db := OpenDatabase()
+
+	rows, err := db.Query("SELECT id, gross_price, created_at FROM monsters ORDER BY created_at DESC LIMIT 1")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var records []MonsterRecord
+	for rows.Next() {
+		var rec MonsterRecord
+		if err := rows.Scan(&rec.ID, &rec.GrossPrice, &rec.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		records = append(records, rec)
 	}
 
-	_ = t.ExecuteTemplate(w, "index.html.tmpl", data)
+	jsonData, err := json.Marshal(records)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(jsonData)
+}
+
+func CreateTableHandler(w http.ResponseWriter, _ *http.Request) {
+	db := OpenDatabase()
+
+	log.Println("Creating table monsters")
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS monsters (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\"gross_price\" TEXT, \"created_at\" DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	log.Println("Table monsters created")
+}
+
+func InsertLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
+	monster := getMonsterData()
+	db := OpenDatabase()
+
+	log.Println("Inserting monster price into database")
+	_, err := db.Exec("INSERT INTO monsters (gross_price) VALUES (?)", monster.GrossPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	log.Println("Monster price inserted into database")
 }
 
 func PingHandler(w http.ResponseWriter, _ *http.Request) {
@@ -97,6 +147,15 @@ func getMonsterData() Monster {
 	return monster
 }
 
+func OpenDatabase() *sql.DB {
+	db, err := sql.Open("sqlite3", "/data/monsterdatabase.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return db
+}
+
 func createInsecureHTTPClient() *http.Client {
 	customTransport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -105,8 +164,5 @@ func createInsecureHTTPClient() *http.Client {
 }
 
 type Monster struct {
-	Id             int    `json:"id"`
-	FullName       string `json:"full_name"`
-	GrossPrice     string `json:"gross_price"`
-	GrossUnitPrice string `json:"gross_unit_price"`
+	GrossPrice string `json:"gross_price"`
 }
