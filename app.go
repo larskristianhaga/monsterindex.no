@@ -48,7 +48,7 @@ type MonsterRecord struct {
 func RootHandler(w http.ResponseWriter, _ *http.Request) {
 	db := OpenDatabase()
 
-	rows, err := db.Query("SELECT id, gross_price, created_at FROM monsters ORDER BY created_at DESC LIMIT 1")
+	rows, err := db.Query("SELECT id, gross_price, created_at FROM monsters ORDER BY created_at DESC")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
