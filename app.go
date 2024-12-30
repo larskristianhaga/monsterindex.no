@@ -32,8 +32,6 @@ func main() {
 	http.HandleFunc("/", RootHandler)
 	http.HandleFunc("/insert-latest-monster-price", InsertLatestMonsterPriceHandler)
 	http.HandleFunc("/get-latest-monster-price", GetLatestMonsterPriceHandler)
-	http.HandleFunc("/create-table", CreateTableHandler)
-	http.HandleFunc("/drop-table", DropTableHandler)
 	http.HandleFunc("/ping", PingHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/robots.txt", RobotsHandler)
@@ -73,28 +71,6 @@ func RootHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(jsonData)
-}
-
-func DropTableHandler(w http.ResponseWriter, _ *http.Request) {
-	db := OpenDatabase()
-
-	log.Println("Dropping table monsters")
-	_, err := db.Exec("DROP TABLE IF EXISTS monsters")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	log.Println("Table monsters dropped")
-}
-
-func CreateTableHandler(w http.ResponseWriter, _ *http.Request) {
-	db := OpenDatabase()
-
-	log.Println("Creating table monsters")
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS monsters (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\"gross_price\" INTEGER, \"created_at\" DATETIME DEFAULT CURRENT_TIMESTAMP)")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	log.Println("Table monsters created")
 }
 
 func ConvertPriceToNormalisedInteger(price string) int {
