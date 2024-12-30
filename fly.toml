@@ -4,6 +4,10 @@ primary_region = 'arn'
 [env]
   PORT = '8080'
 
+[[mounts]]
+  source = 'monsterdatabase'
+  destination = '/data'
+
 [http_service]
   internal_port = 8080
   force_https = true
