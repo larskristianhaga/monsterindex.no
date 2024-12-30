@@ -2,8 +2,7 @@ name: "Insert the latest monster prices"
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/10 * * * *' # Run every 10 minutes
-
+    - cron: '0 11 * * *' # Run every day at 11:00 UTC
 
 jobs:
   insert-the-latest-monster-prices:
