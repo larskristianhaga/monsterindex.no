@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +31,9 @@ func main() {
 
 	http.HandleFunc("/", RootHandler)
 	http.HandleFunc("/insert-latest-monster-price", InsertLatestMonsterPriceHandler)
+	http.HandleFunc("/get-latest-monster-price", GetLatestMonsterPriceHandler)
+	http.HandleFunc("/create-table", CreateTableHandler)
+	http.HandleFunc("/drop-table", DropTableHandler)
 	http.HandleFunc("/ping", PingHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/robots.txt", RobotsHandler)
@@ -40,7 +44,7 @@ func main() {
 
 type MonsterRecord struct {
 	ID         int       `json:"id"`
-	GrossPrice string    `json:"gross_price"`
+	GrossPrice int       `json:"gross_price"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -71,12 +75,53 @@ func RootHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(jsonData)
 }
 
+func DropTableHandler(w http.ResponseWriter, _ *http.Request) {
+	db := OpenDatabase()
+
+	log.Println("Dropping table monsters")
+	_, err := db.Exec("DROP TABLE IF EXISTS monsters")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	log.Println("Table monsters dropped")
+}
+
+func CreateTableHandler(w http.ResponseWriter, _ *http.Request) {
+	db := OpenDatabase()
+
+	log.Println("Creating table monsters")
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS monsters (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\"gross_price\" INTEGER, \"created_at\" DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	log.Println("Table monsters created")
+}
+
+func ConvertPriceToNormalisedInteger(price string) int {
+	priceFloat, err := strconv.ParseFloat(price, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priceInt := int(priceFloat * 100)
+	return priceInt
+}
+
+func GetLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
+	monsterPrice := getMonsterData().GrossPrice
+	normalizedMonsterPrice := ConvertPriceToNormalisedInteger(monsterPrice)
+
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte("Current Monster price: " + monsterPrice + "\n" + "Current Monster normalised price : " + strconv.Itoa(normalizedMonsterPrice)))
+}
+
 func InsertLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
 	monster := getMonsterData()
 	db := OpenDatabase()
+	monsterPriceNormalised := ConvertPriceToNormalisedInteger(monster.GrossPrice)
 
 	log.Println("Inserting monster price into database")
-	_, err := db.Exec("INSERT INTO monsters (gross_price) VALUES (?)", monster.GrossPrice)
+	_, err := db.Exec("INSERT INTO monsters (gross_price) VALUES (?)", monsterPriceNormalised)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
