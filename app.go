@@ -41,15 +41,16 @@ func main() {
 }
 
 type MonsterRecord struct {
-	ID         int       `json:"id"`
-	GrossPrice int       `json:"gross_price"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID                   int       `json:"id"`
+	GrossPrice           string    `json:"gross_price"`
+	GrossPriceNormalised int       `json:"gross_price_normalised"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 func RootHandler(w http.ResponseWriter, _ *http.Request) {
 	db := OpenDatabase()
 
-	rows, err := db.Query("SELECT id, gross_price, created_at FROM monsters ORDER BY created_at DESC")
+	rows, err := db.Query("SELECT id, gross_price, gross_price_normalised, created_at FROM monsters ORDER BY created_at DESC")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -59,7 +60,7 @@ func RootHandler(w http.ResponseWriter, _ *http.Request) {
 	var records []MonsterRecord
 	for rows.Next() {
 		var rec MonsterRecord
-		if err := rows.Scan(&rec.ID, &rec.GrossPrice, &rec.CreatedAt); err != nil {
+		if err := rows.Scan(&rec.ID, &rec.GrossPrice, &rec.GrossPriceNormalised, &rec.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -92,12 +93,12 @@ func GetLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func InsertLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
-	monster := getMonsterData()
+	monsterPrice := getMonsterData().GrossPrice
+	monsterPriceNormalised := ConvertPriceToNormalisedInteger(monsterPrice)
 	db := OpenDatabase()
-	monsterPriceNormalised := ConvertPriceToNormalisedInteger(monster.GrossPrice)
 
 	log.Println("Inserting monster price into database")
-	_, err := db.Exec("INSERT INTO monsters (gross_price) VALUES (?)", monsterPriceNormalised)
+	_, err := db.Exec("INSERT INTO monsters (gross_price, gross_price_normalised) VALUES (?, ?)", monsterPrice, monsterPriceNormalised)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
