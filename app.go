@@ -32,19 +32,13 @@ func main() {
 	http.HandleFunc("/", RootHandler)
 	http.HandleFunc("/insert-latest-monster-price", InsertLatestMonsterPriceHandler)
 	http.HandleFunc("/get-latest-monster-price", GetLatestMonsterPriceHandler)
+	http.HandleFunc("/get-raw-data", GetRawDataHandler)
 	http.HandleFunc("/ping", PingHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/robots.txt", RobotsHandler)
 	http.HandleFunc("/sitemap.xml", SitemapHandler)
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
-}
-
-type MonsterRecord struct {
-	ID                   int       `json:"id"`
-	GrossPrice           string    `json:"gross_price"`
-	GrossPriceNormalised int       `json:"gross_price_normalised"`
-	CreatedAt            time.Time `json:"created_at"`
 }
 
 func RootHandler(w http.ResponseWriter, _ *http.Request) {
@@ -66,12 +60,14 @@ func RootHandler(w http.ResponseWriter, _ *http.Request) {
 		}
 		records = append(records, rec)
 	}
+	_ = t.ExecuteTemplate(w, "index.html.tmpl", records)
+}
 
-	jsonData, err := json.Marshal(records)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(jsonData)
+type MonsterRecord struct {
+	ID                   int       `json:"id"`
+	GrossPrice           string    `json:"gross_price"`
+	GrossPriceNormalised int       `json:"gross_price_normalised"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 func ConvertPriceToNormalisedInteger(price string) int {
@@ -82,14 +78,6 @@ func ConvertPriceToNormalisedInteger(price string) int {
 
 	priceInt := int(priceFloat * 100)
 	return priceInt
-}
-
-func GetLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
-	monsterPrice := getMonsterData().GrossPrice
-	normalizedMonsterPrice := ConvertPriceToNormalisedInteger(monsterPrice)
-
-	w.Header().Set("Content-Type", "text/plain")
-	_, _ = w.Write([]byte("Current Monster price: " + monsterPrice + "\n" + "Current Monster normalised price : " + strconv.Itoa(normalizedMonsterPrice)))
 }
 
 func InsertLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
@@ -103,6 +91,38 @@ func InsertLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	log.Println("Monster price inserted into database")
+}
+
+func GetLatestMonsterPriceHandler(w http.ResponseWriter, _ *http.Request) {
+	monsterPrice := getMonsterData().GrossPrice
+	normalizedMonsterPrice := ConvertPriceToNormalisedInteger(monsterPrice)
+
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte("Current Monster price: " + monsterPrice + "\n" + "Current Monster normalised price : " + strconv.Itoa(normalizedMonsterPrice)))
+}
+
+func GetRawDataHandler(w http.ResponseWriter, _ *http.Request) {
+	db := OpenDatabase()
+
+	rows, err := db.Query("SELECT id, gross_price, gross_price_normalised, created_at FROM monsters ORDER BY created_at DESC")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var records []MonsterRecord
+	for rows.Next() {
+		var rec MonsterRecord
+		if err := rows.Scan(&rec.ID, &rec.GrossPrice, &rec.GrossPriceNormalised, &rec.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		records = append(records, rec)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(records)
 }
 
 func PingHandler(w http.ResponseWriter, _ *http.Request) {
@@ -157,6 +177,10 @@ func getMonsterData() Monster {
 	return monster
 }
 
+type Monster struct {
+	GrossPrice string `json:"gross_price"`
+}
+
 func OpenDatabase() *sql.DB {
 	db, err := sql.Open("sqlite3", "/data/monsterdatabase.db")
 	if err != nil {
@@ -171,8 +195,4 @@ func createInsecureHTTPClient() *http.Client {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	return &http.Client{Transport: customTransport}
-}
-
-type Monster struct {
-	GrossPrice string `json:"gross_price"`
 }
